@@ -1,0 +1,939 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Batch Stamper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  *{box-sizing:border-box;}
+  html,body{ margin:0; }
+  img{ max-width:100%; }
+  [hidden]{ display:none !important; }
+
+  :root{
+    --bg:#f4f5f8;
+    --surface:#ffffff;
+    --surface-alt:#edeff4;
+    --border:#dcdfe6;
+    --text:#161a22;
+    --text-dim:#5b6474;
+    --accent:#2f5ed8;
+    --accent-ink:#ffffff;
+    --accent-dim:#e6ecfb;
+    --success:#1f8a5f;
+    --success-dim:#e3f5ec;
+    --danger:#c93b3b;
+    --danger-dim:#fbeaea;
+    --focus:#2f5ed8;
+    --shadow: 0 1px 2px rgba(20,24,32,0.04), 0 6px 20px rgba(20,24,32,0.05);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0f1218;
+      --surface:#171b24;
+      --surface-alt:#1e232e;
+      --border:#2a3040;
+      --text:#e7eaf0;
+      --text-dim:#8991a3;
+      --accent:#7b93ff;
+      --accent-ink:#0f1218;
+      --accent-dim:#20264a;
+      --success:#49c48d;
+      --success-dim:#123326;
+      --danger:#ff7b7f;
+      --danger-dim:#3a1c1e;
+      --focus:#7b93ff;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1218;
+    --surface:#171b24;
+    --surface-alt:#1e232e;
+    --border:#2a3040;
+    --text:#e7eaf0;
+    --text-dim:#8991a3;
+    --accent:#7b93ff;
+    --accent-ink:#0f1218;
+    --accent-dim:#20264a;
+    --success:#49c48d;
+    --success-dim:#123326;
+    --danger:#ff7b7f;
+    --danger-dim:#3a1c1e;
+    --focus:#7b93ff;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  }
+
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:"IBM Plex Sans", system-ui, sans-serif;
+    line-height:1.45;
+  }
+  .mono{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  .shell{ max-width:1120px; margin:0 auto; padding:40px 24px 80px; }
+
+  header.top{ margin-bottom:28px; }
+  header.top .eyebrow{
+    font-family:"IBM Plex Mono", monospace;
+    font-size:12px; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--accent); margin:0 0 8px;
+  }
+  header.top h1{
+    font-size:30px; font-weight:700; margin:0 0 8px; letter-spacing:-0.01em;
+    text-wrap:balance;
+  }
+  header.top p{ color:var(--text-dim); margin:0; max-width:60ch; font-size:15px; }
+
+  .grid{
+    display:grid;
+    grid-template-columns: 340px 1fr;
+    gap:20px;
+    align-items:start;
+  }
+  @media (max-width: 820px){
+    .grid{ grid-template-columns: 1fr; }
+  }
+
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:14px;
+    box-shadow:var(--shadow);
+    padding:20px;
+  }
+  .card + .card{ margin-top:20px; }
+
+  .card h2{
+    font-size:13px; font-weight:600; letter-spacing:0.03em; text-transform:uppercase;
+    color:var(--text-dim); margin:0 0 16px;
+  }
+
+  .field{ margin-bottom:16px; }
+  .field:last-child{ margin-bottom:0; }
+  .field label{
+    display:block; font-size:12.5px; font-weight:500; color:var(--text-dim);
+    margin-bottom:6px;
+  }
+  .field .row-between{
+    display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;
+  }
+  .field .row-between label{ margin-bottom:0; }
+  .field .row-between .value{
+    font-family:"IBM Plex Mono", monospace; font-size:12px; color:var(--text);
+  }
+
+  input[type="text"], select{
+    width:100%; padding:9px 10px; border-radius:8px; border:1px solid var(--border);
+    background:var(--surface-alt); color:var(--text); font-family:inherit; font-size:14px;
+  }
+  input[type="text"]:focus, select:focus, button:focus-visible, .swatch:focus-visible, .pos-btn:focus-visible{
+    outline:2px solid var(--focus); outline-offset:1px;
+  }
+  input[type="range"]{ width:100%; accent-color:var(--accent); }
+
+  .seg{
+    display:flex; border:1px solid var(--border); border-radius:8px; overflow:hidden;
+  }
+  .seg button{
+    flex:1; border:none; background:var(--surface-alt); color:var(--text-dim);
+    font:inherit; font-size:13px; font-weight:500; padding:8px 6px; cursor:pointer;
+    border-right:1px solid var(--border);
+  }
+  .seg button:last-child{ border-right:none; }
+  .seg button.active{ background:var(--accent); color:var(--accent-ink); }
+
+  .color-row{ display:flex; gap:8px; align-items:center; }
+  .swatch{
+    width:34px; height:34px; border-radius:8px; border:1px solid var(--border);
+    cursor:pointer; padding:0;
+  }
+  input[type="color"]{
+    -webkit-appearance:none; width:34px; height:34px; border:1px solid var(--border);
+    border-radius:8px; padding:0; background:none; cursor:pointer;
+  }
+  input[type="color"]::-webkit-color-swatch-wrapper{ padding:0; }
+  input[type="color"]::-webkit-color-swatch{ border:none; border-radius:7px; }
+
+  .posgrid{
+    display:grid; grid-template-columns:repeat(3,1fr); gap:6px; width:100%;
+  }
+  .pos-btn{
+    aspect-ratio:1; border-radius:8px; border:1px solid var(--border);
+    background:var(--surface-alt); cursor:pointer; position:relative;
+  }
+  .pos-btn .dot{
+    position:absolute; width:6px; height:6px; border-radius:50%; background:var(--text-dim);
+  }
+  .pos-btn.active{ border-color:var(--accent); background:var(--accent-dim); }
+  .pos-btn.active .dot{ background:var(--accent); }
+
+  .stamp-upload{
+    display:flex; align-items:center; gap:10px;
+  }
+  .thumb{
+    width:40px; height:40px; border-radius:8px; border:1px solid var(--border);
+    background:var(--surface-alt) center/contain no-repeat; flex-shrink:0;
+  }
+  .btn-ghost{
+    border:1px solid var(--border); background:var(--surface-alt); color:var(--text);
+    font:inherit; font-size:13px; font-weight:500; padding:8px 12px; border-radius:8px; cursor:pointer;
+  }
+  .btn-ghost:hover{ border-color:var(--accent); }
+
+  /* preview */
+  .preview-wrap{
+    display:flex; justify-content:center; padding:8px 0 4px;
+  }
+  .preview-page{
+    position:relative; width:170px; height:220px; background:var(--surface-alt);
+    border:1px solid var(--border); border-radius:6px; box-shadow:var(--shadow);
+    overflow:hidden;
+  }
+  .preview-page::before{
+    content:""; position:absolute; inset:14px; border-radius:2px;
+    background:
+      repeating-linear-gradient( var(--border) 0 1.5px, transparent 1.5px 14px );
+    opacity:0.5;
+  }
+  .preview-stamp{
+    position:absolute; white-space:nowrap; pointer-events:none;
+    font-family:"IBM Plex Mono", monospace; font-weight:600; letter-spacing:0.03em;
+  }
+  .preview-stamp img{ display:block; }
+
+  /* dropzone */
+  .dropzone{
+    border:1.5px dashed var(--border); border-radius:12px; padding:34px 20px;
+    text-align:center; color:var(--text-dim); cursor:pointer; transition:border-color .15s, background .15s;
+  }
+  .dropzone.drag{ border-color:var(--accent); background:var(--accent-dim); }
+  .dropzone .icon{ font-size:26px; margin-bottom:8px; }
+  .dropzone strong{ color:var(--text); }
+  .dropzone .hint{ font-size:12.5px; margin-top:4px; }
+  #file-input{ display:none; }
+
+  .queue-head{
+    display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:12px; flex-wrap:wrap;
+  }
+  .queue-head h2{ margin:0; }
+  .queue-stats{ font-size:12.5px; color:var(--text-dim); }
+  .queue-stats .mono{ color:var(--text); }
+
+  .file-list{ display:flex; flex-direction:column; gap:8px; margin-bottom:18px; }
+  .file-row{
+    display:flex; align-items:center; gap:12px; padding:10px 12px; border:1px solid var(--border);
+    border-radius:10px; background:var(--surface-alt);
+  }
+  .file-row .kind{
+    width:34px; height:34px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+    font-size:14px; font-weight:700; flex-shrink:0; font-family:"IBM Plex Mono",monospace;
+    background:var(--accent-dim); color:var(--accent);
+  }
+  .file-row .meta{ flex:1; min-width:0; }
+  .file-row .name{ font-size:13.5px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .file-row .size{ font-size:12px; color:var(--text-dim); }
+  .file-row .status{ font-size:12px; font-weight:500; flex-shrink:0; white-space:nowrap; }
+  .file-row .status.pending{ color:var(--text-dim); }
+  .file-row .status.processing{ color:var(--accent); }
+  .file-row .status.done{ color:var(--success); }
+  .file-row .status.error{ color:var(--danger); }
+  .file-row .remove{
+    border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:16px;
+    width:24px; height:24px; border-radius:6px; flex-shrink:0;
+  }
+  .file-row .remove:hover{ background:var(--border); color:var(--text); }
+
+  .empty-hint{ font-size:12.5px; color:var(--text-dim); text-align:center; padding:8px 0 0; }
+
+  .action-bar{
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    padding-top:14px; border-top:1px solid var(--border); flex-wrap:wrap;
+  }
+  .action-bar .summary{ font-size:12.5px; color:var(--text-dim); }
+  .action-bar .summary .mono{ color:var(--text); }
+
+  .btn-primary{
+    background:var(--accent); color:var(--accent-ink); border:none; border-radius:9px;
+    font:inherit; font-size:14px; font-weight:600; padding:11px 20px; cursor:pointer;
+    display:inline-flex; align-items:center; gap:8px;
+  }
+  .btn-primary:disabled{ opacity:0.5; cursor:not-allowed; }
+  .btn-primary:not(:disabled):hover{ filter:brightness(1.06); }
+
+  .banner{
+    display:flex; gap:10px; align-items:flex-start; padding:12px 14px; border-radius:10px;
+    font-size:13px; margin-bottom:16px; border:1px solid transparent;
+  }
+  .banner.info{ background:var(--accent-dim); color:var(--text); border-color:var(--border); }
+  .banner.error{ background:var(--danger-dim); color:var(--danger); }
+  .banner.success{ background:var(--success-dim); color:var(--success); }
+  .banner[hidden]{ display:none; }
+
+  .progress{
+    height:6px; border-radius:99px; background:var(--surface-alt); overflow:hidden; margin-bottom:14px;
+    border:1px solid var(--border);
+  }
+  .progress-fill{ height:100%; background:var(--accent); width:0%; transition:width .2s; }
+
+  footer.foot{
+    margin-top:32px; font-size:12px; color:var(--text-dim); text-align:center;
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <header class="top">
+    <p class="eyebrow">Runs entirely in this page — no server, no upload</p>
+    <h1>Batch Stamper</h1>
+    <p>Configure a stamp once, drop in a batch of PDFs or images, and download every stamped file as a single zip. Files are processed locally in your browser and never sent anywhere.</p>
+  </header>
+
+  <div class="grid">
+    <!-- LEFT: stamp config -->
+    <div>
+      <div class="card">
+        <h2>Stamp</h2>
+
+        <div class="field">
+          <label>Stamp type</label>
+          <div class="seg" id="mode-seg">
+            <button data-mode="text" class="active">Text</button>
+            <button data-mode="image">Image</button>
+            <button data-mode="both">Both</button>
+          </div>
+        </div>
+
+        <div class="field" id="text-field">
+          <label for="stamp-text">Stamp text</label>
+          <input type="text" id="stamp-text" value="APPROVED" maxlength="40">
+        </div>
+
+        <div class="field" id="color-field">
+          <label>Text colour</label>
+          <div class="color-row">
+            <input type="color" id="stamp-color" value="#c93b3b">
+            <span class="mono" id="color-value" style="font-size:12px;color:var(--text-dim);">#C93B3B</span>
+          </div>
+        </div>
+
+        <div class="field" id="image-field" style="display:none;">
+          <label>Stamp image (logo / seal)</label>
+          <div class="stamp-upload">
+            <div class="thumb" id="stamp-thumb"></div>
+            <button class="btn-ghost" id="stamp-image-btn" type="button">Choose image…</button>
+            <input type="file" id="stamp-image-input" accept="image/png,image/jpeg,image/webp" style="display:none;">
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="row-between">
+            <label for="font-size" id="size-label">Size</label>
+            <span class="value mono" id="size-value">28pt</span>
+          </div>
+          <input type="range" id="font-size" min="10" max="72" value="28">
+        </div>
+
+        <div class="field">
+          <div class="row-between">
+            <label for="rotation">Rotation</label>
+            <span class="value mono" id="rotation-value">−20°</span>
+          </div>
+          <input type="range" id="rotation" min="-45" max="45" value="-20">
+        </div>
+
+        <div class="field">
+          <div class="row-between">
+            <label for="opacity">Opacity</label>
+            <span class="value mono" id="opacity-value">70%</span>
+          </div>
+          <input type="range" id="opacity" min="10" max="100" value="70">
+        </div>
+
+        <div class="field">
+          <label>Position</label>
+          <div class="posgrid" id="pos-grid"></div>
+        </div>
+
+        <div class="field">
+          <label>Applies to PDF pages</label>
+          <div class="seg" id="pages-seg">
+            <button data-pages="all" class="active">All pages</button>
+            <button data-pages="first">First page only</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Preview</h2>
+        <div class="preview-wrap">
+          <div class="preview-page" id="preview-page">
+            <div class="preview-stamp" id="preview-stamp"></div>
+          </div>
+        </div>
+        <p class="empty-hint">Updates live as you adjust the stamp</p>
+      </div>
+    </div>
+
+    <!-- RIGHT: file queue -->
+    <div class="card">
+      <div class="queue-head">
+        <h2 style="margin:0;">Files</h2>
+        <div class="queue-stats"><span class="mono" id="file-count">0</span> queued · <span class="mono" id="file-size">0 KB</span></div>
+      </div>
+
+      <div id="banner-slot"></div>
+
+      <div class="dropzone" id="dropzone">
+        <div class="icon">📥</div>
+        <div><strong>Drop PDFs or images here</strong></div>
+        <div class="hint">or click to browse — .pdf, .png, .jpg, .webp</div>
+        <input type="file" id="file-input" multiple accept="application/pdf,image/png,image/jpeg,image/webp">
+      </div>
+
+      <div class="file-list" id="file-list" style="margin-top:16px;"></div>
+
+      <div class="progress" id="progress" hidden>
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+
+      <div class="action-bar">
+        <div class="summary" id="action-summary">Add files to get started</div>
+        <button class="btn-primary" id="process-btn" disabled>
+          <span id="process-label">Stamp &amp; download all</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="foot">Text stamps use pdf-lib for PDFs and Canvas for images · files never leave this page</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const POSITIONS = [
+    {key:"top-left", h:"left", v:"top"}, {key:"top-center", h:"center", v:"top"}, {key:"top-right", h:"right", v:"top"},
+    {key:"middle-left", h:"left", v:"middle"}, {key:"center", h:"center", v:"middle"}, {key:"middle-right", h:"right", v:"middle"},
+    {key:"bottom-left", h:"left", v:"bottom"}, {key:"bottom-center", h:"center", v:"bottom"}, {key:"bottom-right", h:"right", v:"bottom"}
+  ];
+
+  const state = {
+    mode: "text",
+    text: "APPROVED",
+    color: "#c93b3b",
+    fontSize: 28,
+    rotation: -20,
+    opacity: 70,
+    position: "bottom-right",
+    pdfPages: "all",
+    stampImage: null,
+    margin: 0.06
+  };
+
+  const files = [];
+  let idSeq = 1;
+
+  const el = (id) => document.getElementById(id);
+  const modeSeg = el("mode-seg");
+  const textField = el("text-field");
+  const colorField = el("color-field");
+  const imageField = el("image-field");
+  const stampText = el("stamp-text");
+  const stampColor = el("stamp-color");
+  const colorValue = el("color-value");
+  const stampImageBtn = el("stamp-image-btn");
+  const stampImageInput = el("stamp-image-input");
+  const stampThumb = el("stamp-thumb");
+  const fontSize = el("font-size");
+  const sizeValue = el("size-value");
+  const rotation = el("rotation");
+  const rotationValue = el("rotation-value");
+  const opacity = el("opacity");
+  const opacityValue = el("opacity-value");
+  const posGrid = el("pos-grid");
+  const pagesSeg = el("pages-seg");
+  const previewStamp = el("preview-stamp");
+  const dropzone = el("dropzone");
+  const fileInput = el("file-input");
+  const fileList = el("file-list");
+  const fileCount = el("file-count");
+  const fileSize = el("file-size");
+  const actionSummary = el("action-summary");
+  const processBtn = el("process-btn");
+  const processLabel = el("process-label");
+  const progress = el("progress");
+  const progressFill = el("progress-fill");
+  const bannerSlot = el("banner-slot");
+
+  function showBanner(kind, msg) {
+    bannerSlot.innerHTML = "";
+    const d = document.createElement("div");
+    d.className = "banner " + kind;
+    d.textContent = msg;
+    bannerSlot.appendChild(d);
+  }
+  function clearBanner(){ bannerSlot.innerHTML = ""; }
+
+  POSITIONS.forEach(p => {
+    const b = document.createElement("button");
+    b.className = "pos-btn" + (p.key === state.position ? " active" : "");
+    b.type = "button";
+    b.dataset.key = p.key;
+    b.title = p.key.replace("-", " ");
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    dot.style.left = p.h === "left" ? "8px" : p.h === "right" ? "calc(100% - 14px)" : "calc(50% - 3px)";
+    dot.style.top = p.v === "top" ? "8px" : p.v === "bottom" ? "calc(100% - 14px)" : "calc(50% - 3px)";
+    b.appendChild(dot);
+    b.addEventListener("click", () => {
+      state.position = p.key;
+      posGrid.querySelectorAll(".pos-btn").forEach(x => x.classList.remove("active"));
+      b.classList.add("active");
+      renderPreview();
+    });
+    posGrid.appendChild(b);
+  });
+
+  modeSeg.querySelectorAll("button").forEach(b => {
+    b.addEventListener("click", () => {
+      modeSeg.querySelectorAll("button").forEach(x => x.classList.remove("active"));
+      b.classList.add("active");
+      state.mode = b.dataset.mode;
+      textField.style.display = state.mode === "image" ? "none" : "";
+      colorField.style.display = state.mode === "image" ? "none" : "";
+      imageField.style.display = state.mode === "text" ? "none" : "";
+      renderPreview();
+    });
+  });
+
+  stampText.addEventListener("input", () => { state.text = stampText.value || "STAMP"; renderPreview(); });
+  stampColor.addEventListener("input", () => {
+    state.color = stampColor.value;
+    colorValue.textContent = stampColor.value.toUpperCase();
+    renderPreview();
+  });
+  fontSize.addEventListener("input", () => {
+    state.fontSize = Number(fontSize.value);
+    sizeValue.textContent = state.fontSize + "pt";
+    renderPreview();
+  });
+  rotation.addEventListener("input", () => {
+    state.rotation = Number(rotation.value);
+    rotationValue.textContent = (state.rotation > 0 ? "+" : "−") + Math.abs(state.rotation) + "°";
+    renderPreview();
+  });
+  opacity.addEventListener("input", () => {
+    state.opacity = Number(opacity.value);
+    opacityValue.textContent = state.opacity + "%";
+    renderPreview();
+  });
+  pagesSeg.querySelectorAll("button").forEach(b => {
+    b.addEventListener("click", () => {
+      pagesSeg.querySelectorAll("button").forEach(x => x.classList.remove("active"));
+      b.classList.add("active");
+      state.pdfPages = b.dataset.pages;
+    });
+  });
+
+  stampImageBtn.addEventListener("click", () => stampImageInput.click());
+  stampImageInput.addEventListener("change", () => {
+    const f = stampImageInput.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        state.stampImage = { dataUrl: reader.result, mime: f.type, width: img.naturalWidth, height: img.naturalHeight };
+        stampThumb.style.backgroundImage = "url(" + reader.result + ")";
+        renderPreview();
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(f);
+  });
+
+  function renderPreview() {
+    const pageEl = el("preview-page");
+    const pw = pageEl.clientWidth, ph = pageEl.clientHeight;
+    const margin = pw * state.margin * 2.2;
+
+    previewStamp.innerHTML = "";
+    previewStamp.style.opacity = state.opacity / 100;
+
+    let node;
+    if (state.mode === "image" && state.stampImage) {
+      node = document.createElement("img");
+      node.src = state.stampImage.dataUrl;
+      const targetW = Math.min(70, pw * 0.4);
+      const ratio = state.stampImage.height / state.stampImage.width;
+      node.style.width = targetW + "px";
+      node.style.height = (targetW * ratio) + "px";
+    } else if (state.mode === "text" || (state.mode === "both" && !state.stampImage)) {
+      node = document.createElement("span");
+      node.textContent = state.text || "STAMP";
+      node.style.color = state.color;
+      node.style.fontSize = Math.max(9, state.fontSize * 0.4) + "px";
+    } else {
+      node = document.createElement("div");
+      node.style.display = "flex";
+      node.style.flexDirection = "column";
+      node.style.alignItems = "center";
+      node.style.gap = "2px";
+      const img = document.createElement("img");
+      img.src = state.stampImage.dataUrl;
+      const targetW = Math.min(50, pw * 0.3);
+      const ratio = state.stampImage.height / state.stampImage.width;
+      img.style.width = targetW + "px";
+      img.style.height = (targetW * ratio) + "px";
+      const span = document.createElement("span");
+      span.textContent = state.text || "STAMP";
+      span.style.color = state.color;
+      span.style.fontSize = Math.max(8, state.fontSize * 0.32) + "px";
+      node.appendChild(img);
+      node.appendChild(span);
+    }
+    previewStamp.appendChild(node);
+    previewStamp.style.transform = "rotate(" + (-state.rotation) + "deg)";
+
+    requestAnimationFrame(() => {
+      const sw = previewStamp.offsetWidth, sh = previewStamp.offsetHeight;
+      let x, y;
+      if (state.position.includes("left")) x = margin;
+      else if (state.position.includes("right")) x = pw - sw - margin;
+      else x = (pw - sw) / 2;
+      if (state.position.startsWith("top")) y = margin;
+      else if (state.position.startsWith("bottom")) y = ph - sh - margin;
+      else y = (ph - sh) / 2;
+      previewStamp.style.left = x + "px";
+      previewStamp.style.top = y + "px";
+      previewStamp.style.transformOrigin = "center";
+    });
+  }
+
+  function humanSize(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  function addFiles(fileArr) {
+    clearBanner();
+    Array.from(fileArr).forEach(f => {
+      const isPdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+      const isImg = /^image\/(png|jpeg|webp)$/.test(f.type);
+      if (!isPdf && !isImg) {
+        showBanner("error", "\"" + f.name + "\" isn't a supported type — only PDF, PNG, JPG, or WEBP.");
+        return;
+      }
+      files.push({ id: idSeq++, file: f, kind: isPdf ? "pdf" : "image", status: "pending", error: null, outBlob: null, outName: null });
+    });
+    renderFileList();
+  }
+
+  function removeFile(id) {
+    const idx = files.findIndex(x => x.id === id);
+    if (idx >= 0) files.splice(idx, 1);
+    renderFileList();
+  }
+
+  function renderFileList() {
+    fileList.innerHTML = "";
+    let totalSize = 0;
+    files.forEach(f => {
+      totalSize += f.file.size;
+      const row = document.createElement("div");
+      row.className = "file-row";
+      row.innerHTML =
+        '<div class="kind">' + (f.kind === "pdf" ? "PDF" : "IMG") + '</div>' +
+        '<div class="meta"><div class="name">' + escapeHtml(f.file.name) + '</div><div class="size mono">' + humanSize(f.file.size) + '</div></div>' +
+        '<div class="status ' + f.status + '">' + statusLabel(f) + '</div>' +
+        '<button class="remove" title="Remove" data-id="' + f.id + '">×</button>';
+      row.querySelector(".remove").addEventListener("click", () => removeFile(f.id));
+      fileList.appendChild(row);
+    });
+    fileCount.textContent = files.length;
+    fileSize.textContent = humanSize(totalSize);
+    actionSummary.textContent = files.length
+      ? files.length + " file" + (files.length > 1 ? "s" : "") + " queued · " + humanSize(totalSize)
+      : "Add files to get started";
+    processBtn.disabled = files.length === 0;
+  }
+
+  function statusLabel(f) {
+    if (f.status === "pending") return "Queued";
+    if (f.status === "processing") return "Stamping…";
+    if (f.status === "done") return "Stamped";
+    if (f.status === "error") return "Failed";
+    return "";
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  dropzone.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => { addFiles(fileInput.files); fileInput.value = ""; });
+  ["dragenter", "dragover"].forEach(evt =>
+    dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add("drag"); })
+  );
+  ["dragleave", "drop"].forEach(evt =>
+    dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove("drag"); })
+  );
+  dropzone.addEventListener("drop", (e) => {
+    if (e.dataTransfer.files && e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+  });
+
+  function anchorFractions(posKey) {
+    const p = POSITIONS.find(x => x.key === posKey) || POSITIONS[8];
+    const hx = p.h === "left" ? 0 : p.h === "right" ? 1 : 0.5;
+    const vy = p.v === "top" ? 0 : p.v === "bottom" ? 1 : 0.5;
+    return { hx, vy };
+  }
+
+  async function stampPdf(entry) {
+    const bytes = await entry.file.arrayBuffer();
+    const pdfDoc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+    const font = await pdfDoc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+    let stampImg = null;
+    if (state.mode !== "text" && state.stampImage) {
+      const imgBytes = dataUrlToBytes(state.stampImage.dataUrl);
+      stampImg = /png/.test(state.stampImage.mime) ? await pdfDoc.embedPng(imgBytes) : await pdfDoc.embedJpg(imgBytes);
+    }
+    const allPages = pdfDoc.getPages();
+    const targetPages = state.pdfPages === "all" ? allPages : [allPages[0]];
+    const [r, g, b] = hexToRgb01(state.color);
+    const opacityFrac = state.opacity / 100;
+
+    targetPages.forEach(page => {
+      const { width: pw, height: ph } = page.getSize();
+      const margin = Math.min(pw, ph) * state.margin;
+      const { hx, vy } = anchorFractions(state.position);
+
+      let stampW = 0, stampH = 0;
+      const drawText = state.mode === "text" || state.mode === "both";
+      const drawImg = (state.mode === "image" || state.mode === "both") && stampImg;
+
+      if (drawText) {
+        stampW = font.widthOfTextAtSize(state.text, state.fontSize);
+        stampH = state.fontSize;
+      }
+      if (drawImg) {
+        const targetW = Math.min(pw * 0.28, 160);
+        const ratio = stampImg.height / stampImg.width;
+        stampW = Math.max(stampW, targetW);
+        stampH += stampImg.height ? targetW * ratio : 0;
+      }
+
+      let x = margin + hx * (pw - 2 * margin - stampW);
+      let y = margin + (1 - vy) * (ph - 2 * margin - stampH);
+
+      if (drawImg) {
+        const targetW = Math.min(pw * 0.28, 160);
+        const ratio = stampImg.height / stampImg.width;
+        const targetH = targetW * ratio;
+        const imgY = drawText ? y + stampH - targetH : y;
+        page.drawImage(stampImg, {
+          x: x + (stampW - targetW) / 2, y: imgY, width: targetW, height: targetH,
+          opacity: opacityFrac, rotate: PDFLib.degrees(state.rotation)
+        });
+      }
+      if (drawText) {
+        page.drawText(state.text, {
+          x, y, size: state.fontSize, font,
+          color: PDFLib.rgb(r, g, b), opacity: opacityFrac,
+          rotate: PDFLib.degrees(state.rotation)
+        });
+      }
+    });
+
+    const outBytes = await pdfDoc.save();
+    return new Blob([outBytes], { type: "application/pdf" });
+  }
+
+  async function stampImage(entry) {
+    const dataUrl = await fileToDataUrl(entry.file);
+    const img = await loadImage(dataUrl);
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+
+    const margin = Math.min(canvas.width, canvas.height) * state.margin;
+    const { hx, vy } = anchorFractions(state.position);
+    const opacityFrac = state.opacity / 100;
+    ctx.globalAlpha = opacityFrac;
+
+    const drawText = state.mode === "text" || state.mode === "both";
+    const drawImg = (state.mode === "image" || state.mode === "both") && state.stampImage;
+
+    let stampW = 0, stampH = 0, stampImgEl = null, imgTargetW = 0, imgTargetH = 0;
+    if (drawText) {
+      ctx.font = "700 " + state.fontSize + "px 'IBM Plex Mono', monospace";
+      stampW = ctx.measureText(state.text).width;
+      stampH = state.fontSize;
+    }
+    if (drawImg) {
+      stampImgEl = await loadImage(state.stampImage.dataUrl);
+      imgTargetW = Math.min(canvas.width * 0.28, 220);
+      imgTargetH = imgTargetW * (stampImgEl.naturalHeight / stampImgEl.naturalWidth);
+      stampW = Math.max(stampW, imgTargetW);
+      stampH += imgTargetH;
+    }
+
+    let x = margin + hx * (canvas.width - 2 * margin - stampW);
+    let yTop = margin + vy * (canvas.height - 2 * margin - stampH);
+
+    ctx.save();
+    if (drawImg) {
+      ctx.save();
+      const cx = x + imgTargetW / 2, cy = yTop + imgTargetH / 2;
+      ctx.translate(cx, cy);
+      ctx.rotate(-state.rotation * Math.PI / 180);
+      ctx.drawImage(stampImgEl, -imgTargetW / 2, -imgTargetH / 2, imgTargetW, imgTargetH);
+      ctx.restore();
+    }
+    if (drawText) {
+      const textY = drawImg ? yTop + imgTargetH + stampH * 0.55 : yTop + stampH * 0.8;
+      const cx = x + stampW / 2, cy = textY - stampH * 0.3;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(-state.rotation * Math.PI / 180);
+      ctx.fillStyle = state.color;
+      ctx.font = "700 " + state.fontSize + "px 'IBM Plex Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(state.text, 0, 0);
+      ctx.restore();
+    }
+    ctx.restore();
+
+    const mime = entry.file.type === "image/png" ? "image/png" : "image/jpeg";
+    return await new Promise(resolve => canvas.toBlob(resolve, mime, 0.92));
+  }
+
+  function loadImage(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+  }
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+  }
+  function dataUrlToBytes(dataUrl) {
+    const base64 = dataUrl.split(",")[1];
+    const bin = atob(base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+  function hexToRgb01(hex) {
+    const h = hex.replace("#", "");
+    const r = parseInt(h.substring(0, 2), 16) / 255;
+    const g = parseInt(h.substring(2, 4), 16) / 255;
+    const b = parseInt(h.substring(4, 6), 16) / 255;
+    return [r, g, b];
+  }
+  function stripExt(name) { return name.replace(/\.[^.]+$/, ""); }
+
+  function triggerDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  processBtn.addEventListener("click", async () => {
+    if (!files.length) return;
+    clearBanner();
+    processBtn.disabled = true;
+    processLabel.textContent = "Stamping…";
+    progress.hidden = false;
+
+    let done = 0;
+    const zip = new JSZip();
+    let successCount = 0, errorCount = 0;
+
+    for (const entry of files) {
+      entry.status = "processing";
+      renderFileList();
+      try {
+        let blob;
+        if (entry.kind === "pdf") blob = await stampPdf(entry);
+        else blob = await stampImage(entry);
+        entry.outBlob = blob;
+        entry.outName = stripExt(entry.file.name) + "-stamped" + (entry.kind === "pdf" ? ".pdf" : (entry.file.type === "image/png" ? ".png" : ".jpg"));
+        zip.file(entry.outName, blob);
+        entry.status = "done";
+        successCount++;
+      } catch (err) {
+        entry.status = "error";
+        entry.error = String(err && err.message || err);
+        errorCount++;
+      }
+      done++;
+      progressFill.style.width = Math.round((done / files.length) * 100) + "%";
+      renderFileList();
+    }
+
+    if (successCount === 0) {
+      showBanner("error", "No files could be stamped. Check that they're valid PDFs or images and try again.");
+      processBtn.disabled = false;
+      processLabel.textContent = "Stamp & download all";
+      progress.hidden = true;
+      return;
+    }
+
+    processLabel.textContent = "Zipping…";
+    const zipBlob = await zip.generateAsync({ type: "blob" });
+    const stamp = new Date().toISOString().slice(0, 10);
+
+    try {
+      triggerDownload(zipBlob, "stamped-files-" + stamp + ".zip");
+      showBanner("success",
+        errorCount
+          ? "Downloaded " + successCount + " stamped file" + (successCount > 1 ? "s" : "") + " (" + errorCount + " failed — see status above)."
+          : "Downloaded " + successCount + " stamped file" + (successCount > 1 ? "s" : "") + " as a zip."
+      );
+    } catch (e) {
+      showBanner("error", "Files were stamped but the download couldn't start. Try again, or check your browser's download settings.");
+    }
+
+    progress.hidden = true;
+    processBtn.disabled = false;
+    processLabel.textContent = "Stamp & download all";
+  });
+
+  textField.style.display = "";
+  colorField.style.display = "";
+  imageField.style.display = "none";
+  colorValue.textContent = state.color.toUpperCase();
+  renderFileList();
+  renderPreview();
+  window.addEventListener("resize", renderPreview);
+})();
+</script>
+</body>
+</html>

@@ -345,9 +345,9 @@
         <div class="field">
           <div class="row-between">
             <label for="rotation">Rotation</label>
-            <span class="value mono" id="rotation-value">−20°</span>
+            <span class="value mono" id="rotation-value">0°</span>
           </div>
-          <input type="range" id="rotation" min="-45" max="45" value="-20">
+          <input type="range" id="rotation" min="-45" max="45" value="0">
         </div>
 
         <div class="field">
@@ -432,7 +432,7 @@
     text: "APPROVED",
     color: "#c93b3b",
     fontSize: 28,
-    rotation: -20,
+    rotation: 0,
     opacity: 70,
     position: "bottom-right",
     pdfPages: "all",
@@ -529,7 +529,7 @@
   });
   rotation.addEventListener("input", () => {
     state.rotation = Number(rotation.value);
-    rotationValue.textContent = (state.rotation > 0 ? "+" : "−") + Math.abs(state.rotation) + "°";
+    rotationValue.textContent = (state.rotation > 0 ? "+" : state.rotation < 0 ? "−" : "") + Math.abs(state.rotation) + "°";
     renderPreview();
   });
   opacity.addEventListener("input", () => {
